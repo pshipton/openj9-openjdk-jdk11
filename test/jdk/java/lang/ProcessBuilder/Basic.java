@@ -1737,7 +1737,7 @@ public class Basic {
                 File dir = new File(sdir);
                 if (! (dir.isDirectory() && dir.exists()))
                     continue;
-                out.println("Testing directory " + dir);
+                err.println("Testing directory " + dir);
                 //dir = new File(dir.getCanonicalPath());
 
                 ProcessBuilder pb = new ProcessBuilder();
