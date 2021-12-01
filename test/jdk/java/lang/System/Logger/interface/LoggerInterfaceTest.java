@@ -47,6 +47,7 @@ public class LoggerInterfaceTest {
             Throwable thrown;
             Object[] params;
             StackTraceElement[] callStack;
+            Throwable throwable;
 
             @Override
             protected LogEvent clone() {
@@ -66,8 +67,9 @@ public class LoggerInterfaceTest {
                 event.level = level;
                 return this;
             }
-            public LogEventBuilder stack(StackTraceElement... stack) {
-                event.callStack = stack;
+            public LogEventBuilder stack(Throwable throwable) {
+            	event.throwable = throwable;
+                event.callStack = throwable.getStackTrace();
                 return this;
             }
             public LogEventBuilder bundle(ResourceBundle bundle) {
@@ -114,14 +116,14 @@ public class LoggerInterfaceTest {
         @Override
         public void log(Level level, ResourceBundle bundle, String msg, Throwable thrown) {
             builder.clear().level(level).bundle(bundle).msg(msg).thrown(thrown)
-                    .stack(new Exception().getStackTrace());
+                    .stack(new Exception());
             consumer.accept(builder.build());
         }
 
         @Override
         public void log(Level level, ResourceBundle bundle, String format, Object... params) {
             builder.clear().level(level).bundle(bundle).msg(format).params(params)
-                    .stack(new Exception().getStackTrace());
+                    .stack(new Exception());
             consumer.accept(builder.build());
         }
 
