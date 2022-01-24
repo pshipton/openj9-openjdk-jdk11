@@ -56,7 +56,9 @@ public class NativeLibraryTest {
             // create a class loader and load a native library
             runTest();
             // unloading the class loader and native library
-            System.gc();
+            for (int i=0; i<33; i++) {
+            	System.gc();
+            }
             // give Cleaner thread a chance to unload the native library
             Thread.sleep(100);
 
