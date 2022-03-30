@@ -1,6 +1,6 @@
 /*
  * ===========================================================================
- * (c) Copyright IBM Corp. 2019, 2019 All Rights Reserved
+ * (c) Copyright IBM Corp. 2019, 2022 All Rights Reserved
  * ===========================================================================
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,6 +36,7 @@ void * load_crypto_library() {
     
     // Library names for OpenSSL 1.1.1, 1.1.0, 1.0.2 and symbolic links
     static const char * const libNames[] = {
+    	"libcrypto.so.3",
         "libcrypto.so.1.1",   // 1.1.x library name
         "libcrypto.so.1.0.0", // 1.0.x library name
         "libcrypto.so.10",    // 1.0.x library name on RHEL
