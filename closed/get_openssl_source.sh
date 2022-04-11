@@ -1,7 +1,7 @@
 #!/bin/sh
   
 # ===========================================================================
-# (c) Copyright IBM Corp. 2018, 2019 All Rights Reserved
+# (c) Copyright IBM Corp. 2018, 2022 All Rights Reserved
 # ===========================================================================
 # 
 # This code is free software; you can redistribute it and/or modify it
@@ -59,11 +59,17 @@ do
 	esac
 done
 
-if [ "${OPENSSL_VERSION:0:5}" != "1.0.2" -a "${OPENSSL_VERSION:0:4}" != "1.1." ] ; then
-	usage
-fi
-
-OPENSSL_SOURCE_TAG=$(echo "OpenSSL.${OPENSSL_VERSION}" | sed -e 's/\./_/g' )
+case "$OPENSSL_VERSION" in
+	1.0.2* | 1.1.*)
+		OPENSSL_SOURCE_TAG=$(echo "OpenSSL.$OPENSSL_VERSION" | sed -e 's/\./_/g')
+		;;
+	3.*)
+		OPENSSL_SOURCE_TAG="openssl-$OPENSSL_VERSION"
+		;;
+	*)
+		usage
+		;;
+esac
 
 if [ -f "openssl/openssl_version.txt" ]; then
 	DOWNLOADED_VERSION=$(cat openssl/openssl_version.txt)
