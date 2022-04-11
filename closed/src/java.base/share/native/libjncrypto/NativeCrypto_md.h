@@ -1,6 +1,6 @@
 /*
  * ===========================================================================
- * (c) Copyright IBM Corp. 2019, 2019 All Rights Reserved
+ * (c) Copyright IBM Corp. 2019, 2022 All Rights Reserved
  * ===========================================================================
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,10 +22,11 @@
  * ===========================================================================
  */
 
+#include <jni.h>
 #ifndef NATIVECRYPTO_MD_H
 #define NATIVECRYPTO_MD_H
 
-void * load_crypto_library();
+void * load_crypto_library(jboolean traceEnabled);
 void   unload_crypto_library(void *handle);
 void * find_crypto_symbol(void *handle, const char *symname);
 
