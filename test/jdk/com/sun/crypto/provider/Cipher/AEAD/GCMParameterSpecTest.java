@@ -36,7 +36,7 @@ import javax.crypto.spec.GCMParameterSpec;
  */
 public class GCMParameterSpecTest {
 
-    private static final int[] IV_LENGTHS = { 96, 8, 1024 };
+    private static final int[] IV_LENGTHS = { 8, 16 };
     private static final int[] KEY_LENGTHS = { 128, 192, 256 };
     private static final int[] DATA_LENGTHS = { 0, 128, 1024 };
     private static final int[] AAD_LENGTHS = { 0, 128, 1024 };
