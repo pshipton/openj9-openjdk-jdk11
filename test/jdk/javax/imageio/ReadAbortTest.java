@@ -103,7 +103,7 @@ public class ReadAbortTest implements IIOReadProgressListener {
         } catch (Exception e) {
             throw e;
         } finally {
-            Files.delete(file.toPath());
+            if (file != null) Files.delete(file.toPath());
         }
     }
 
