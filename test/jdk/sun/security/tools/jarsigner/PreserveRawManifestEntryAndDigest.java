@@ -214,7 +214,7 @@ public class PreserveRawManifestEntryAndDigest {
         jarsignerMain("-verify -strict -keystore " + KEYSTORE_FILENAME +
                 " -storepass changeit -debug -verbose " + jarFilename + " b");
         // return result of verification of signature by a before update
-        return jarsignerProc("-verify -strict " + "-keystore " +
+        return jarsignerProc("-J-Xdump:system+java+snap:events=throw+systhrow,filter=java/lang/ArrayIndexOutOfBoundsException -verify -strict " + "-keystore " +
                 KEYSTORE_FILENAME + " -storepass changeit " + "-debug " +
                 "-verbose " + jarFilename + " a")
                 .shouldHaveExitValue(updateExitCodeVerifyA);
