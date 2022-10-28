@@ -316,14 +316,6 @@ CreateExecutionEnvironment(int *pargc, char ***pargv,
     int argc = *pargc;
     char **argv = *pargv;
 
-#ifdef AIX
-    const char *mallocOptionsName = "MALLOCOPTIONS";
-    const char *mallocOptionsValue = "multiheap,considersize";
-    if (setenv(mallocOptionsName, mallocOptionsValue, 0) != 0) {
-        fprintf(stderr, "setenv('MALLOCOPTIONS=multiheap,considersize') failed: performance may be affected\n");
-    }
-#endif
-
 #ifdef SETENV_REQUIRED
     jboolean mustsetenv = JNI_FALSE;
     char *runpath = NULL; /* existing effective LD_LIBRARY_PATH setting */
