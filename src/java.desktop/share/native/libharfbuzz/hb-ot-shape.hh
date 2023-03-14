@@ -38,20 +38,20 @@ struct hb_ot_shape_plan_key_t
   unsigned int variations_index[2];
 
   void init (hb_face_t *face,
-             const int *coords,
-             unsigned   num_coords)
+	     const int *coords,
+	     unsigned   num_coords)
   {
     for (unsigned int table_index = 0; table_index < 2; table_index++)
       hb_ot_layout_table_find_feature_variations (face,
-                                                  table_tags[table_index],
-                                                  coords,
-                                                  num_coords,
-                                                  &variations_index[table_index]);
+						  table_tags[table_index],
+						  coords,
+						  num_coords,
+						  &variations_index[table_index]);
   }
 
   bool equal (const hb_ot_shape_plan_key_t *other)
   {
-    return 0 == memcmp (this, other, sizeof (*this));
+    return 0 == hb_memcmp (this, other, sizeof (*this));
   }
 };
 
@@ -60,10 +60,11 @@ struct hb_shape_plan_key_t;
 
 struct hb_ot_shape_plan_t
 {
+  ~hb_ot_shape_plan_t () { fini (); }
+
   hb_segment_properties_t props;
   const struct hb_ot_shaper_t *shaper;
   hb_ot_map_t map;
-  hb_aat_map_t aat_map;
   const void *data;
 #ifndef HB_NO_OT_SHAPE_FRACTIONS
   hb_mask_t frac_mask, numr_mask, dnom_mask;
@@ -135,7 +136,7 @@ struct hb_ot_shape_plan_t
   }
 
   HB_INTERNAL bool init0 (hb_face_t                     *face,
-                          const hb_shape_plan_key_t     *key);
+			  const hb_shape_plan_key_t     *key);
   HB_INTERNAL void fini ();
 
   HB_INTERNAL void substitute (hb_font_t *font, hb_buffer_t *buffer) const;
@@ -150,7 +151,6 @@ struct hb_ot_shape_planner_t
   hb_face_t *face;
   hb_segment_properties_t props;
   hb_ot_map_builder_t map;
-  hb_aat_map_builder_t aat_map;
 #ifndef HB_NO_AAT_SHAPE
   bool apply_morx : 1;
 #else
@@ -161,10 +161,10 @@ struct hb_ot_shape_planner_t
   const struct hb_ot_shaper_t *shaper;
 
   HB_INTERNAL hb_ot_shape_planner_t (hb_face_t                     *face,
-                                     const hb_segment_properties_t *props);
+				     const hb_segment_properties_t &props);
 
   HB_INTERNAL void compile (hb_ot_shape_plan_t           &plan,
-                            const hb_ot_shape_plan_key_t &key);
+			    const hb_ot_shape_plan_key_t &key);
 };
 
 

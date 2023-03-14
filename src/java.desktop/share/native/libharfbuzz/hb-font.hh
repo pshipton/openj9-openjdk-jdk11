@@ -40,24 +40,25 @@
  */
 
 #define HB_FONT_FUNCS_IMPLEMENT_CALLBACKS \
-  HB_FONT_FUNC_IMPLEMENT (font_h_extents) \
-  HB_FONT_FUNC_IMPLEMENT (font_v_extents) \
-  HB_FONT_FUNC_IMPLEMENT (nominal_glyph) \
-  HB_FONT_FUNC_IMPLEMENT (nominal_glyphs) \
-  HB_FONT_FUNC_IMPLEMENT (variation_glyph) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_h_advance) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_v_advance) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_h_advances) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_v_advances) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_h_origin) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_v_origin) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_h_kerning) \
-  HB_IF_NOT_DEPRECATED (HB_FONT_FUNC_IMPLEMENT (glyph_v_kerning)) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_extents) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_contour_point) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_name) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_from_name) \
-  HB_FONT_FUNC_IMPLEMENT (glyph_shape) \
+  HB_FONT_FUNC_IMPLEMENT (get_,font_h_extents) \
+  HB_FONT_FUNC_IMPLEMENT (get_,font_v_extents) \
+  HB_FONT_FUNC_IMPLEMENT (get_,nominal_glyph) \
+  HB_FONT_FUNC_IMPLEMENT (get_,nominal_glyphs) \
+  HB_FONT_FUNC_IMPLEMENT (get_,variation_glyph) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_h_advance) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_v_advance) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_h_advances) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_v_advances) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_h_origin) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_v_origin) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_h_kerning) \
+  HB_IF_NOT_DEPRECATED (HB_FONT_FUNC_IMPLEMENT (get_,glyph_v_kerning)) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_extents) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_contour_point) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_name) \
+  HB_FONT_FUNC_IMPLEMENT (get_,glyph_from_name) \
+  HB_FONT_FUNC_IMPLEMENT (,draw_glyph) \
+  HB_FONT_FUNC_IMPLEMENT (,paint_glyph) \
   /* ^--- Add new callbacks here */
 
 struct hb_font_funcs_t
@@ -65,13 +66,13 @@ struct hb_font_funcs_t
   hb_object_header_t header;
 
   struct {
-#define HB_FONT_FUNC_IMPLEMENT(name) void *name;
+#define HB_FONT_FUNC_IMPLEMENT(get_,name) void *name;
     HB_FONT_FUNCS_IMPLEMENT_CALLBACKS
 #undef HB_FONT_FUNC_IMPLEMENT
   } *user_data;
 
   struct {
-#define HB_FONT_FUNC_IMPLEMENT(name) hb_destroy_func_t name;
+#define HB_FONT_FUNC_IMPLEMENT(get_,name) hb_destroy_func_t name;
     HB_FONT_FUNCS_IMPLEMENT_CALLBACKS
 #undef HB_FONT_FUNC_IMPLEMENT
   } *destroy;
@@ -79,15 +80,15 @@ struct hb_font_funcs_t
   /* Don't access these directly.  Call font->get_*() instead. */
   union get_t {
     struct get_funcs_t {
-#define HB_FONT_FUNC_IMPLEMENT(name) hb_font_get_##name##_func_t name;
+#define HB_FONT_FUNC_IMPLEMENT(get_,name) hb_font_##get_##name##_func_t name;
       HB_FONT_FUNCS_IMPLEMENT_CALLBACKS
 #undef HB_FONT_FUNC_IMPLEMENT
     } f;
     void (*array[0
-#define HB_FONT_FUNC_IMPLEMENT(name) +1
+#define HB_FONT_FUNC_IMPLEMENT(get_,name) +1
       HB_FONT_FUNCS_IMPLEMENT_CALLBACKS
 #undef HB_FONT_FUNC_IMPLEMENT
-                ]) ();
+		]) ();
   } get;
 };
 DECLARE_NULL_INSTANCE (hb_font_funcs_t);
@@ -112,8 +113,16 @@ struct hb_font_t
 
   int32_t x_scale;
   int32_t y_scale;
+
+  float x_embolden;
+  float y_embolden;
+  bool embolden_in_place;
+  int32_t x_strength; /* x_embolden, in scaled units. */
+  int32_t y_strength; /* y_embolden, in scaled units. */
+
   float slant;
   float slant_xy;
+
   float x_multf;
   float y_multf;
   int64_t x_mult;
@@ -125,6 +134,7 @@ struct hb_font_t
   float ptem;
 
   /* Font variation coordinates. */
+  unsigned int instance_index;
   unsigned int num_coords;
   int *coords;
   float *design_coords;
@@ -179,6 +189,42 @@ struct hb_font_t
     *y = parent_scale_y_position (*y);
   }
 
+  void scale_glyph_extents (hb_glyph_extents_t *extents)
+  {
+    float x1 = em_fscale_x (extents->x_bearing);
+    float y1 = em_fscale_y (extents->y_bearing);
+    float x2 = em_fscale_x (extents->x_bearing + extents->width);
+    float y2 = em_fscale_y (extents->y_bearing + extents->height);
+
+    /* Apply slant. */
+    if (slant_xy)
+    {
+      x1 += hb_min (y1 * slant_xy, y2 * slant_xy);
+      x2 += hb_max (y1 * slant_xy, y2 * slant_xy);
+    }
+
+    extents->x_bearing = floorf (x1);
+    extents->y_bearing = floorf (y1);
+    extents->width = ceilf (x2) - extents->x_bearing;
+    extents->height = ceilf (y2) - extents->y_bearing;
+
+    if (x_strength || y_strength)
+    {
+      /* Y */
+      int y_shift = y_strength;
+      if (y_scale < 0) y_shift = -y_shift;
+      extents->y_bearing += y_shift;
+      extents->height -= y_shift;
+
+      /* X */
+      int x_shift = x_strength;
+      if (x_scale < 0) x_shift = -x_shift;
+      if (embolden_in_place)
+	extents->x_bearing -= x_shift / 2;
+      extents->width += x_shift;
+    }
+  }
+
 
   /* Public getters */
 
@@ -186,7 +232,7 @@ struct hb_font_t
   HB_INTERNAL bool has_func_set (unsigned int i);
 
   /* has_* ... */
-#define HB_FONT_FUNC_IMPLEMENT(name) \
+#define HB_FONT_FUNC_IMPLEMENT(get_,name) \
   bool \
   has_##name##_func () \
   { \
@@ -206,17 +252,17 @@ struct hb_font_t
 
   hb_bool_t get_font_h_extents (hb_font_extents_t *extents)
   {
-    memset (extents, 0, sizeof (*extents));
+    hb_memset (extents, 0, sizeof (*extents));
     return klass->get.f.font_h_extents (this, user_data,
-                                        extents,
-                                        !klass->user_data ? nullptr : klass->user_data->font_h_extents);
+					extents,
+					!klass->user_data ? nullptr : klass->user_data->font_h_extents);
   }
   hb_bool_t get_font_v_extents (hb_font_extents_t *extents)
   {
-    memset (extents, 0, sizeof (*extents));
+    hb_memset (extents, 0, sizeof (*extents));
     return klass->get.f.font_v_extents (this, user_data,
-                                        extents,
-                                        !klass->user_data ? nullptr : klass->user_data->font_v_extents);
+					extents,
+					!klass->user_data ? nullptr : klass->user_data->font_v_extents);
   }
 
   bool has_glyph (hb_codepoint_t unicode)
@@ -226,169 +272,180 @@ struct hb_font_t
   }
 
   hb_bool_t get_nominal_glyph (hb_codepoint_t unicode,
-                               hb_codepoint_t *glyph,
-                               hb_codepoint_t not_found = 0)
+			       hb_codepoint_t *glyph,
+			       hb_codepoint_t not_found = 0)
   {
     *glyph = not_found;
     return klass->get.f.nominal_glyph (this, user_data,
-                                       unicode, glyph,
-                                       !klass->user_data ? nullptr : klass->user_data->nominal_glyph);
+				       unicode, glyph,
+				       !klass->user_data ? nullptr : klass->user_data->nominal_glyph);
   }
   unsigned int get_nominal_glyphs (unsigned int count,
-                                   const hb_codepoint_t *first_unicode,
-                                   unsigned int unicode_stride,
-                                   hb_codepoint_t *first_glyph,
-                                   unsigned int glyph_stride)
+				   const hb_codepoint_t *first_unicode,
+				   unsigned int unicode_stride,
+				   hb_codepoint_t *first_glyph,
+				   unsigned int glyph_stride)
   {
     return klass->get.f.nominal_glyphs (this, user_data,
-                                        count,
-                                        first_unicode, unicode_stride,
-                                        first_glyph, glyph_stride,
-                                        !klass->user_data ? nullptr : klass->user_data->nominal_glyphs);
+					count,
+					first_unicode, unicode_stride,
+					first_glyph, glyph_stride,
+					!klass->user_data ? nullptr : klass->user_data->nominal_glyphs);
   }
 
   hb_bool_t get_variation_glyph (hb_codepoint_t unicode, hb_codepoint_t variation_selector,
-                                 hb_codepoint_t *glyph,
-                                 hb_codepoint_t not_found = 0)
+				 hb_codepoint_t *glyph,
+				 hb_codepoint_t not_found = 0)
   {
     *glyph = not_found;
     return klass->get.f.variation_glyph (this, user_data,
-                                         unicode, variation_selector, glyph,
-                                         !klass->user_data ? nullptr : klass->user_data->variation_glyph);
+					 unicode, variation_selector, glyph,
+					 !klass->user_data ? nullptr : klass->user_data->variation_glyph);
   }
 
   hb_position_t get_glyph_h_advance (hb_codepoint_t glyph)
   {
     return klass->get.f.glyph_h_advance (this, user_data,
-                                         glyph,
-                                         !klass->user_data ? nullptr : klass->user_data->glyph_h_advance);
+					 glyph,
+					 !klass->user_data ? nullptr : klass->user_data->glyph_h_advance);
   }
 
   hb_position_t get_glyph_v_advance (hb_codepoint_t glyph)
   {
     return klass->get.f.glyph_v_advance (this, user_data,
-                                         glyph,
-                                         !klass->user_data ? nullptr : klass->user_data->glyph_v_advance);
+					 glyph,
+					 !klass->user_data ? nullptr : klass->user_data->glyph_v_advance);
   }
 
   void get_glyph_h_advances (unsigned int count,
-                             const hb_codepoint_t *first_glyph,
-                             unsigned int glyph_stride,
-                             hb_position_t *first_advance,
-                             unsigned int advance_stride)
+			     const hb_codepoint_t *first_glyph,
+			     unsigned int glyph_stride,
+			     hb_position_t *first_advance,
+			     unsigned int advance_stride)
   {
     return klass->get.f.glyph_h_advances (this, user_data,
-                                          count,
-                                          first_glyph, glyph_stride,
-                                          first_advance, advance_stride,
-                                          !klass->user_data ? nullptr : klass->user_data->glyph_h_advances);
+					  count,
+					  first_glyph, glyph_stride,
+					  first_advance, advance_stride,
+					  !klass->user_data ? nullptr : klass->user_data->glyph_h_advances);
   }
 
   void get_glyph_v_advances (unsigned int count,
-                             const hb_codepoint_t *first_glyph,
-                             unsigned int glyph_stride,
-                             hb_position_t *first_advance,
-                             unsigned int advance_stride)
+			     const hb_codepoint_t *first_glyph,
+			     unsigned int glyph_stride,
+			     hb_position_t *first_advance,
+			     unsigned int advance_stride)
   {
     return klass->get.f.glyph_v_advances (this, user_data,
-                                          count,
-                                          first_glyph, glyph_stride,
-                                          first_advance, advance_stride,
-                                          !klass->user_data ? nullptr : klass->user_data->glyph_v_advances);
+					  count,
+					  first_glyph, glyph_stride,
+					  first_advance, advance_stride,
+					  !klass->user_data ? nullptr : klass->user_data->glyph_v_advances);
   }
 
   hb_bool_t get_glyph_h_origin (hb_codepoint_t glyph,
-                                hb_position_t *x, hb_position_t *y)
+				hb_position_t *x, hb_position_t *y)
   {
     *x = *y = 0;
     return klass->get.f.glyph_h_origin (this, user_data,
-                                        glyph, x, y,
-                                        !klass->user_data ? nullptr : klass->user_data->glyph_h_origin);
+					glyph, x, y,
+					!klass->user_data ? nullptr : klass->user_data->glyph_h_origin);
   }
 
   hb_bool_t get_glyph_v_origin (hb_codepoint_t glyph,
-                                hb_position_t *x, hb_position_t *y)
+				hb_position_t *x, hb_position_t *y)
   {
     *x = *y = 0;
     return klass->get.f.glyph_v_origin (this, user_data,
-                                        glyph, x, y,
-                                        !klass->user_data ? nullptr : klass->user_data->glyph_v_origin);
+					glyph, x, y,
+					!klass->user_data ? nullptr : klass->user_data->glyph_v_origin);
   }
 
   hb_position_t get_glyph_h_kerning (hb_codepoint_t left_glyph,
-                                     hb_codepoint_t right_glyph)
+				     hb_codepoint_t right_glyph)
   {
 #ifdef HB_DISABLE_DEPRECATED
     return 0;
 #else
     return klass->get.f.glyph_h_kerning (this, user_data,
-                                         left_glyph, right_glyph,
-                                         !klass->user_data ? nullptr : klass->user_data->glyph_h_kerning);
+					 left_glyph, right_glyph,
+					 !klass->user_data ? nullptr : klass->user_data->glyph_h_kerning);
 #endif
   }
 
   hb_position_t get_glyph_v_kerning (hb_codepoint_t top_glyph,
-                                     hb_codepoint_t bottom_glyph)
+				     hb_codepoint_t bottom_glyph)
   {
 #ifdef HB_DISABLE_DEPRECATED
     return 0;
 #else
     return klass->get.f.glyph_v_kerning (this, user_data,
-                                         top_glyph, bottom_glyph,
-                                         !klass->user_data ? nullptr : klass->user_data->glyph_v_kerning);
+					 top_glyph, bottom_glyph,
+					 !klass->user_data ? nullptr : klass->user_data->glyph_v_kerning);
 #endif
   }
 
   hb_bool_t get_glyph_extents (hb_codepoint_t glyph,
-                               hb_glyph_extents_t *extents)
+			       hb_glyph_extents_t *extents)
   {
-    memset (extents, 0, sizeof (*extents));
+    hb_memset (extents, 0, sizeof (*extents));
     return klass->get.f.glyph_extents (this, user_data,
-                                       glyph,
-                                       extents,
-                                       !klass->user_data ? nullptr : klass->user_data->glyph_extents);
+				       glyph,
+				       extents,
+				       !klass->user_data ? nullptr : klass->user_data->glyph_extents);
   }
 
   hb_bool_t get_glyph_contour_point (hb_codepoint_t glyph, unsigned int point_index,
-                                     hb_position_t *x, hb_position_t *y)
+				     hb_position_t *x, hb_position_t *y)
   {
     *x = *y = 0;
     return klass->get.f.glyph_contour_point (this, user_data,
-                                             glyph, point_index,
-                                             x, y,
-                                             !klass->user_data ? nullptr : klass->user_data->glyph_contour_point);
+					     glyph, point_index,
+					     x, y,
+					     !klass->user_data ? nullptr : klass->user_data->glyph_contour_point);
   }
 
   hb_bool_t get_glyph_name (hb_codepoint_t glyph,
-                            char *name, unsigned int size)
+			    char *name, unsigned int size)
   {
     if (size) *name = '\0';
     return klass->get.f.glyph_name (this, user_data,
-                                    glyph,
-                                    name, size,
-                                    !klass->user_data ? nullptr : klass->user_data->glyph_name);
+				    glyph,
+				    name, size,
+				    !klass->user_data ? nullptr : klass->user_data->glyph_name);
   }
 
   hb_bool_t get_glyph_from_name (const char *name, int len, /* -1 means nul-terminated */
-                                 hb_codepoint_t *glyph)
+				 hb_codepoint_t *glyph)
   {
     *glyph = 0;
     if (len == -1) len = strlen (name);
     return klass->get.f.glyph_from_name (this, user_data,
-                                         name, len,
-                                         glyph,
-                                         !klass->user_data ? nullptr : klass->user_data->glyph_from_name);
+					 name, len,
+					 glyph,
+					 !klass->user_data ? nullptr : klass->user_data->glyph_from_name);
   }
 
-  void get_glyph_shape (hb_codepoint_t glyph,
-                        hb_draw_funcs_t *draw_funcs, void *draw_data)
+  void draw_glyph (hb_codepoint_t glyph,
+		   hb_draw_funcs_t *draw_funcs, void *draw_data)
   {
-    klass->get.f.glyph_shape (this, user_data,
-                              glyph,
-                              draw_funcs, draw_data,
-                              !klass->user_data ? nullptr : klass->user_data->glyph_shape);
+    klass->get.f.draw_glyph (this, user_data,
+			     glyph,
+			     draw_funcs, draw_data,
+			     !klass->user_data ? nullptr : klass->user_data->draw_glyph);
   }
 
+  void paint_glyph (hb_codepoint_t glyph,
+                    hb_paint_funcs_t *paint_funcs, void *paint_data,
+                    unsigned int palette,
+                    hb_color_t foreground)
+  {
+    klass->get.f.paint_glyph (this, user_data,
+                              glyph,
+                              paint_funcs, paint_data,
+                              palette, foreground,
+                              !klass->user_data ? nullptr : klass->user_data->paint_glyph);
+  }
 
   /* A bit higher-level, and with fallback */
 
@@ -412,7 +469,7 @@ struct hb_font_t
   }
 
   void get_extents_for_direction (hb_direction_t direction,
-                                  hb_font_extents_t *extents)
+				  hb_font_extents_t *extents)
   {
     if (likely (HB_DIRECTION_IS_HORIZONTAL (direction)))
       get_h_extents_with_fallback (extents);
@@ -421,8 +478,8 @@ struct hb_font_t
   }
 
   void get_glyph_advance_for_direction (hb_codepoint_t glyph,
-                                        hb_direction_t direction,
-                                        hb_position_t *x, hb_position_t *y)
+					hb_direction_t direction,
+					hb_position_t *x, hb_position_t *y)
   {
     *x = *y = 0;
     if (likely (HB_DIRECTION_IS_HORIZONTAL (direction)))
@@ -431,11 +488,11 @@ struct hb_font_t
       *y = get_glyph_v_advance (glyph);
   }
   void get_glyph_advances_for_direction (hb_direction_t direction,
-                                         unsigned int count,
-                                         const hb_codepoint_t *first_glyph,
-                                         unsigned glyph_stride,
-                                         hb_position_t *first_advance,
-                                         unsigned advance_stride)
+					 unsigned int count,
+					 const hb_codepoint_t *first_glyph,
+					 unsigned glyph_stride,
+					 hb_position_t *first_advance,
+					 unsigned advance_stride)
   {
     if (likely (HB_DIRECTION_IS_HORIZONTAL (direction)))
       get_glyph_h_advances (count, first_glyph, glyph_stride, first_advance, advance_stride);
@@ -444,7 +501,7 @@ struct hb_font_t
   }
 
   void guess_v_origin_minus_h_origin (hb_codepoint_t glyph,
-                                      hb_position_t *x, hb_position_t *y)
+				      hb_position_t *x, hb_position_t *y)
   {
     *x = get_glyph_h_advance (glyph) / 2;
 
@@ -454,10 +511,10 @@ struct hb_font_t
   }
 
   void get_glyph_h_origin_with_fallback (hb_codepoint_t glyph,
-                                         hb_position_t *x, hb_position_t *y)
+					 hb_position_t *x, hb_position_t *y)
   {
     if (!get_glyph_h_origin (glyph, x, y) &&
-         get_glyph_v_origin (glyph, x, y))
+	 get_glyph_v_origin (glyph, x, y))
     {
       hb_position_t dx, dy;
       guess_v_origin_minus_h_origin (glyph, &dx, &dy);
@@ -465,10 +522,10 @@ struct hb_font_t
     }
   }
   void get_glyph_v_origin_with_fallback (hb_codepoint_t glyph,
-                                         hb_position_t *x, hb_position_t *y)
+					 hb_position_t *x, hb_position_t *y)
   {
     if (!get_glyph_v_origin (glyph, x, y) &&
-         get_glyph_h_origin (glyph, x, y))
+	 get_glyph_h_origin (glyph, x, y))
     {
       hb_position_t dx, dy;
       guess_v_origin_minus_h_origin (glyph, &dx, &dy);
@@ -477,8 +534,8 @@ struct hb_font_t
   }
 
   void get_glyph_origin_for_direction (hb_codepoint_t glyph,
-                                       hb_direction_t direction,
-                                       hb_position_t *x, hb_position_t *y)
+				       hb_direction_t direction,
+				       hb_position_t *x, hb_position_t *y)
   {
     if (likely (HB_DIRECTION_IS_HORIZONTAL (direction)))
       get_glyph_h_origin_with_fallback (glyph, x, y);
@@ -487,7 +544,7 @@ struct hb_font_t
   }
 
   void add_glyph_h_origin (hb_codepoint_t glyph,
-                           hb_position_t *x, hb_position_t *y)
+			   hb_position_t *x, hb_position_t *y)
   {
     hb_position_t origin_x, origin_y;
 
@@ -497,7 +554,7 @@ struct hb_font_t
     *y += origin_y;
   }
   void add_glyph_v_origin (hb_codepoint_t glyph,
-                           hb_position_t *x, hb_position_t *y)
+			   hb_position_t *x, hb_position_t *y)
   {
     hb_position_t origin_x, origin_y;
 
@@ -507,8 +564,8 @@ struct hb_font_t
     *y += origin_y;
   }
   void add_glyph_origin_for_direction (hb_codepoint_t glyph,
-                                       hb_direction_t direction,
-                                       hb_position_t *x, hb_position_t *y)
+				       hb_direction_t direction,
+				       hb_position_t *x, hb_position_t *y)
   {
     hb_position_t origin_x, origin_y;
 
@@ -519,7 +576,7 @@ struct hb_font_t
   }
 
   void subtract_glyph_h_origin (hb_codepoint_t glyph,
-                                hb_position_t *x, hb_position_t *y)
+				hb_position_t *x, hb_position_t *y)
   {
     hb_position_t origin_x, origin_y;
 
@@ -529,7 +586,7 @@ struct hb_font_t
     *y -= origin_y;
   }
   void subtract_glyph_v_origin (hb_codepoint_t glyph,
-                                hb_position_t *x, hb_position_t *y)
+				hb_position_t *x, hb_position_t *y)
   {
     hb_position_t origin_x, origin_y;
 
@@ -539,8 +596,8 @@ struct hb_font_t
     *y -= origin_y;
   }
   void subtract_glyph_origin_for_direction (hb_codepoint_t glyph,
-                                            hb_direction_t direction,
-                                            hb_position_t *x, hb_position_t *y)
+					    hb_direction_t direction,
+					    hb_position_t *x, hb_position_t *y)
   {
     hb_position_t origin_x, origin_y;
 
@@ -551,8 +608,8 @@ struct hb_font_t
   }
 
   void get_glyph_kerning_for_direction (hb_codepoint_t first_glyph, hb_codepoint_t second_glyph,
-                                        hb_direction_t direction,
-                                        hb_position_t *x, hb_position_t *y)
+					hb_direction_t direction,
+					hb_position_t *x, hb_position_t *y)
   {
     if (likely (HB_DIRECTION_IS_HORIZONTAL (direction))) {
       *y = 0;
@@ -564,8 +621,8 @@ struct hb_font_t
   }
 
   hb_bool_t get_glyph_extents_for_origin (hb_codepoint_t glyph,
-                                          hb_direction_t direction,
-                                          hb_glyph_extents_t *extents)
+					  hb_direction_t direction,
+					  hb_glyph_extents_t *extents)
   {
     hb_bool_t ret = get_glyph_extents (glyph, extents);
 
@@ -576,8 +633,8 @@ struct hb_font_t
   }
 
   hb_bool_t get_glyph_contour_point_for_origin (hb_codepoint_t glyph, unsigned int point_index,
-                                                hb_direction_t direction,
-                                                hb_position_t *x, hb_position_t *y)
+						hb_direction_t direction,
+						hb_position_t *x, hb_position_t *y)
   {
     hb_bool_t ret = get_glyph_contour_point (glyph, point_index, x, y);
 
@@ -590,7 +647,7 @@ struct hb_font_t
   /* Generates gidDDD if glyph has no name. */
   void
   glyph_to_string (hb_codepoint_t glyph,
-                   char *s, unsigned int size)
+		   char *s, unsigned int size)
   {
     if (get_glyph_name (glyph, s, size)) return;
 
@@ -601,7 +658,7 @@ struct hb_font_t
   /* Parses gidDDD and uniUUUU strings automatically. */
   hb_bool_t
   glyph_from_string (const char *s, int len, /* -1 means nul-terminated */
-                     hb_codepoint_t *glyph)
+		     hb_codepoint_t *glyph)
   {
     if (get_glyph_from_name (s, len, glyph)) return true;
 
@@ -615,15 +672,15 @@ struct hb_font_t
     {
       /* gidDDD syntax for glyph indices. */
       if (0 == strncmp (s, "gid", 3) &&
-          hb_codepoint_parse (s + 3, len - 3, 10, glyph))
-        return true;
+	  hb_codepoint_parse (s + 3, len - 3, 10, glyph))
+	return true;
 
       /* uniUUUU and other Unicode character indices. */
       hb_codepoint_t unichar;
       if (0 == strncmp (s, "uni", 3) &&
-          hb_codepoint_parse (s + 3, len - 3, 16, &unichar) &&
-          get_nominal_glyph (unichar, glyph))
-        return true;
+	  hb_codepoint_parse (s + 3, len - 3, 16, &unichar) &&
+	  get_nominal_glyph (unichar, glyph))
+	return true;
     }
 
     return false;
@@ -632,12 +689,17 @@ struct hb_font_t
   void mults_changed ()
   {
     float upem = face->get_upem ();
+
     x_multf = x_scale / upem;
     y_multf = y_scale / upem;
     bool x_neg = x_scale < 0;
     x_mult = (x_neg ? -((int64_t) -x_scale << 16) : ((int64_t) x_scale << 16)) / upem;
     bool y_neg = y_scale < 0;
     y_mult = (y_neg ? -((int64_t) -y_scale << 16) : ((int64_t) y_scale << 16)) / upem;
+
+    x_strength = fabsf (roundf (x_scale * x_embolden));
+    y_strength = fabsf (roundf (y_scale * y_embolden));
+
     slant_xy = y_scale ? slant * x_scale / y_scale : 0.f;
 
     data.fini ();

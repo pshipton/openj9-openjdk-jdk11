@@ -22,32 +22,32 @@
 
 static hb_unicode_combining_class_t
 hb_ucd_combining_class (hb_unicode_funcs_t *ufuncs HB_UNUSED,
-                        hb_codepoint_t unicode,
-                        void *user_data HB_UNUSED)
+			hb_codepoint_t unicode,
+			void *user_data HB_UNUSED)
 {
   return (hb_unicode_combining_class_t) _hb_ucd_ccc (unicode);
 }
 
 static hb_unicode_general_category_t
 hb_ucd_general_category (hb_unicode_funcs_t *ufuncs HB_UNUSED,
-                         hb_codepoint_t unicode,
-                         void *user_data HB_UNUSED)
+			 hb_codepoint_t unicode,
+			 void *user_data HB_UNUSED)
 {
   return (hb_unicode_general_category_t) _hb_ucd_gc (unicode);
 }
 
 static hb_codepoint_t
 hb_ucd_mirroring (hb_unicode_funcs_t *ufuncs HB_UNUSED,
-                  hb_codepoint_t unicode,
-                  void *user_data HB_UNUSED)
+		  hb_codepoint_t unicode,
+		  void *user_data HB_UNUSED)
 {
   return unicode + _hb_ucd_bmg (unicode);
 }
 
 static hb_script_t
 hb_ucd_script (hb_unicode_funcs_t *ufuncs HB_UNUSED,
-               hb_codepoint_t unicode,
-               void *user_data HB_UNUSED)
+	       hb_codepoint_t unicode,
+	       void *user_data HB_UNUSED)
 {
   return _hb_ucd_sc_map[_hb_ucd_sc (unicode)];
 }
@@ -126,32 +126,38 @@ _cmp_pair_11_7_14 (const void *_key, const void *_item)
 
 static hb_bool_t
 hb_ucd_compose (hb_unicode_funcs_t *ufuncs HB_UNUSED,
-                hb_codepoint_t a, hb_codepoint_t b, hb_codepoint_t *ab,
-                void *user_data HB_UNUSED)
+		hb_codepoint_t a, hb_codepoint_t b, hb_codepoint_t *ab,
+		void *user_data HB_UNUSED)
 {
+  // Hangul is handled algorithmically.
   if (_hb_ucd_compose_hangul (a, b, ab)) return true;
 
   hb_codepoint_t u = 0;
 
   if ((a & 0xFFFFF800u) == 0x0000u && (b & 0xFFFFFF80) == 0x0300u)
   {
+    /* If "a" is small enough and "b" is in the U+0300 range,
+     * the composition data is encoded in a 32bit array sorted
+     * by "a,b" pair. */
     uint32_t k = HB_CODEPOINT_ENCODE3_11_7_14 (a, b, 0);
     const uint32_t *v = hb_bsearch (k,
-                                    _hb_ucd_dm2_u32_map,
-                                    ARRAY_LENGTH (_hb_ucd_dm2_u32_map),
-                                    sizeof (*_hb_ucd_dm2_u32_map),
-                                    _cmp_pair_11_7_14);
+				    _hb_ucd_dm2_u32_map,
+				    ARRAY_LENGTH (_hb_ucd_dm2_u32_map),
+				    sizeof (*_hb_ucd_dm2_u32_map),
+				    _cmp_pair_11_7_14);
     if (likely (!v)) return false;
     u = HB_CODEPOINT_DECODE3_11_7_14_3 (*v);
   }
   else
   {
+    /* Otherwise it is stored in a 64bit array sorted by
+     * "a,b" pair. */
     uint64_t k = HB_CODEPOINT_ENCODE3 (a, b, 0);
     const uint64_t *v = hb_bsearch (k,
-                                    _hb_ucd_dm2_u64_map,
-                                    ARRAY_LENGTH (_hb_ucd_dm2_u64_map),
-                                    sizeof (*_hb_ucd_dm2_u64_map),
-                                    _cmp_pair);
+				    _hb_ucd_dm2_u64_map,
+				    ARRAY_LENGTH (_hb_ucd_dm2_u64_map),
+				    sizeof (*_hb_ucd_dm2_u64_map),
+				    _cmp_pair);
     if (likely (!v)) return false;
     u = HB_CODEPOINT_DECODE3_3 (*v);
   }
@@ -163,22 +169,29 @@ hb_ucd_compose (hb_unicode_funcs_t *ufuncs HB_UNUSED,
 
 static hb_bool_t
 hb_ucd_decompose (hb_unicode_funcs_t *ufuncs HB_UNUSED,
-                  hb_codepoint_t ab, hb_codepoint_t *a, hb_codepoint_t *b,
-                  void *user_data HB_UNUSED)
+		  hb_codepoint_t ab, hb_codepoint_t *a, hb_codepoint_t *b,
+		  void *user_data HB_UNUSED)
 {
   if (_hb_ucd_decompose_hangul (ab, a, b)) return true;
 
   unsigned i = _hb_ucd_dm (ab);
 
+  /* If no data, there's no decomposition. */
   if (likely (!i)) return false;
   i--;
 
+  /* Check if it's a single-character decomposition. */
   if (i < ARRAY_LENGTH (_hb_ucd_dm1_p0_map) + ARRAY_LENGTH (_hb_ucd_dm1_p2_map))
   {
+    /* Single-character decompositions currently are only in plane 0 or plane 2. */
     if (i < ARRAY_LENGTH (_hb_ucd_dm1_p0_map))
+    {
+      /* Plane 0. */
       *a = _hb_ucd_dm1_p0_map[i];
+    }
     else
     {
+      /* Plane 2. */
       i -= ARRAY_LENGTH (_hb_ucd_dm1_p0_map);
       *a = 0x20000 | _hb_ucd_dm1_p2_map[i];
     }
@@ -187,8 +200,10 @@ hb_ucd_decompose (hb_unicode_funcs_t *ufuncs HB_UNUSED,
   }
   i -= ARRAY_LENGTH (_hb_ucd_dm1_p0_map) + ARRAY_LENGTH (_hb_ucd_dm1_p2_map);
 
+  /* Otherwise they are encoded either in a 32bit array or a 64bit array. */
   if (i < ARRAY_LENGTH (_hb_ucd_dm2_u32_map))
   {
+    /* 32bit array. */
     uint32_t v = _hb_ucd_dm2_u32_map[i];
     *a = HB_CODEPOINT_DECODE3_11_7_14_1 (v);
     *b = HB_CODEPOINT_DECODE3_11_7_14_2 (v);
@@ -196,6 +211,7 @@ hb_ucd_decompose (hb_unicode_funcs_t *ufuncs HB_UNUSED,
   }
   i -= ARRAY_LENGTH (_hb_ucd_dm2_u32_map);
 
+  /* 64bit array. */
   uint64_t v = _hb_ucd_dm2_u64_map[i];
   *a = HB_CODEPOINT_DECODE3_1 (v);
   *b = HB_CODEPOINT_DECODE3_2 (v);

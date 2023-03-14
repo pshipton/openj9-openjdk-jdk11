@@ -66,99 +66,29 @@ struct CFFIndex
   {
     TRACE_SERIALIZE (this);
     unsigned int size = get_size ();
-    CFFIndex *out = c->allocate_size<CFFIndex> (size);
+    CFFIndex *out = c->allocate_size<CFFIndex> (size, false);
     if (likely (out))
-      memcpy (out, this, size);
+      hb_memcpy (out, this, size);
     return_trace (out);
   }
 
+  template <typename Iterable,
+	    hb_requires (hb_is_iterable (Iterable))>
   bool serialize (hb_serialize_context_t *c,
-                  unsigned int offSize_,
-                  const byte_str_array_t &byteArray)
+		  const Iterable &iterable)
   {
     TRACE_SERIALIZE (this);
-
-    if (byteArray.length == 0)
-    {
-      COUNT *dest = c->allocate_min<COUNT> ();
-      if (unlikely (!dest)) return_trace (false);
-      *dest = 0;
-      return_trace (true);
-    }
-
-    /* serialize CFFIndex header */
-    if (unlikely (!c->extend_min (this))) return_trace (false);
-    this->count = byteArray.length;
-    this->offSize = offSize_;
-    if (unlikely (!c->allocate_size<HBUINT8> (offSize_ * (byteArray.length + 1))))
-      return_trace (false);
-
-    /* serialize indices */
-    unsigned int  offset = 1;
-    unsigned int  i = 0;
-    for (; i < byteArray.length; i++)
-    {
-      set_offset_at (i, offset);
-      offset += byteArray[i].get_size ();
-    }
-    set_offset_at (i, offset);
-
-    /* serialize data */
-    for (unsigned int i = 0; i < byteArray.length; i++)
-    {
-      const hb_ubytes_t &bs = byteArray[i];
-      unsigned char *dest = c->allocate_size<unsigned char> (bs.length);
-      if (unlikely (!dest)) return_trace (false);
-      memcpy (dest, &bs[0], bs.length);
-    }
-
-    return_trace (true);
-  }
-
-  bool serialize (hb_serialize_context_t *c,
-                  unsigned int offSize_,
-                  const str_buff_vec_t &buffArray)
-  {
-    byte_str_array_t  byteArray;
-    byteArray.init ();
-    byteArray.resize (buffArray.length);
-    for (unsigned int i = 0; i < byteArray.length; i++)
-      byteArray[i] = hb_ubytes_t (buffArray[i].arrayZ, buffArray[i].length);
-    bool result = this->serialize (c, offSize_, byteArray);
-    byteArray.fini ();
-    return result;
-  }
-
-  template <typename Iterator,
-            hb_requires (hb_is_iterator (Iterator))>
-  bool serialize (hb_serialize_context_t *c,
-                  Iterator it)
-  {
-    TRACE_SERIALIZE (this);
-    serialize_header(c, + it | hb_map ([] (const hb_ubytes_t &_) { return _.length; }));
+    auto it = hb_iter (iterable);
+    serialize_header(c, + it | hb_map (hb_iter) | hb_map (hb_len));
     for (const auto &_ : +it)
-      _.copy (c);
+      hb_iter (_).copy (c);
     return_trace (true);
   }
 
-  bool serialize (hb_serialize_context_t *c,
-                  const byte_str_array_t &byteArray)
-  { return serialize (c, + hb_iter (byteArray)); }
-
-  bool serialize (hb_serialize_context_t *c,
-                  const str_buff_vec_t &buffArray)
-  {
-    auto it =
-    + hb_iter (buffArray)
-    | hb_map ([] (const str_buff_t &_) { return hb_ubytes_t (_.arrayZ, _.length); })
-    ;
-    return serialize (c, it);
-  }
-
   template <typename Iterator,
-            hb_requires (hb_is_iterator (Iterator))>
+	    hb_requires (hb_is_iterator (Iterator))>
   bool serialize_header (hb_serialize_context_t *c,
-                        Iterator it)
+			Iterator it)
   {
     TRACE_SERIALIZE (this);
 
@@ -171,7 +101,7 @@ struct CFFIndex
     if (!this->count) return_trace (true);
     if (unlikely (!c->extend (this->offSize))) return_trace (false);
     this->offSize = off_size;
-    if (unlikely (!c->allocate_size<HBUINT8> (off_size * (this->count + 1))))
+    if (unlikely (!c->allocate_size<HBUINT8> (off_size * (this->count + 1), false)))
       return_trace (false);
 
     /* serialize indices */
@@ -179,12 +109,25 @@ struct CFFIndex
     unsigned int i = 0;
     for (unsigned _ : +it)
     {
-      CFFIndex<COUNT>::set_offset_at (i++, offset);
+      set_offset_at (i++, offset);
       offset += _;
     }
-    CFFIndex<COUNT>::set_offset_at (i, offset);
+    set_offset_at (i, offset);
 
     return_trace (true);
+  }
+
+  template <typename Iterable,
+	    hb_requires (hb_is_iterable (Iterable))>
+  static unsigned total_size (const Iterable &iterable)
+  {
+    auto it = + hb_iter (iterable) | hb_map (hb_iter) | hb_map (hb_len);
+    if (!it) return 0;
+
+    unsigned total = + it | hb_reduce (hb_add, 0);
+    unsigned off_size = (hb_bit_storage (total + 1) + 7) / 8;
+
+    return min_size + HBUINT8::static_size + (hb_len (it) + 1) * off_size + total;
   }
 
   void set_offset_at (unsigned int index, unsigned int offset)
@@ -207,10 +150,14 @@ struct CFFIndex
 
     unsigned int size = offSize;
     const HBUINT8 *p = offsets + size * index;
-    unsigned int offset = 0;
-    for (; size; size--)
-      offset = (offset << 8) + *p++;
-    return offset;
+    switch (size)
+    {
+      case 1: return * (HBUINT8  *) p;
+      case 2: return * (HBUINT16 *) p;
+      case 3: return * (HBUINT24 *) p;
+      case 4: return * (HBUINT32 *) p;
+      default: return 0;
+    }
   }
 
   unsigned int length_at (unsigned int index) const
@@ -229,6 +176,7 @@ struct CFFIndex
   hb_ubytes_t operator [] (unsigned int index) const
   {
     if (unlikely (index >= count)) return hb_ubytes_t ();
+    _hb_compiler_memory_r_barrier ();
     unsigned length = length_at (index);
     if (unlikely (!length)) return hb_ubytes_t ();
     return hb_ubytes_t (data_base () + offset_at (index) - 1, length);
@@ -245,20 +193,20 @@ struct CFFIndex
   {
     TRACE_SANITIZE (this);
     return_trace (likely (c->check_struct (this) &&
-                          (count == 0 || /* empty INDEX */
-                           (count < count + 1u &&
-                            c->check_struct (&offSize) && offSize >= 1 && offSize <= 4 &&
-                            c->check_array (offsets, offSize, count + 1u) &&
-                            c->check_array ((const HBUINT8*) data_base (), 1, offset_at (count) - 1)))));
+			  (count == 0 || /* empty INDEX */
+			   (count < count + 1u &&
+			    c->check_struct (&offSize) && offSize >= 1 && offSize <= 4 &&
+			    c->check_array (offsets, offSize, count + 1u) &&
+			    c->check_array ((const HBUINT8*) data_base (), 1, offset_at (count) - 1)))));
   }
 
   public:
-  COUNT         count;          /* Number of object data. Note there are (count+1) offsets */
+  COUNT		count;		/* Number of object data. Note there are (count+1) offsets */
   private:
-  HBUINT8       offSize;        /* The byte size of each offset in the offsets array. */
-  HBUINT8       offsets[HB_VAR_ARRAY];
-                                /* The array of (count + 1) offsets into objects array (1-base). */
-  /* HBUINT8 data[HB_VAR_ARRAY];        Object data */
+  HBUINT8	offSize;	/* The byte size of each offset in the offsets array. */
+  HBUINT8	offsets[HB_VAR_ARRAY];
+				/* The array of (count + 1) offsets into objects array (1-base). */
+  /* HBUINT8 data[HB_VAR_ARRAY];	Object data */
   public:
   DEFINE_SIZE_MIN (COUNT::static_size);
 };
@@ -268,19 +216,19 @@ struct CFFIndexOf : CFFIndex<COUNT>
 {
   template <typename DATA, typename PARAM1, typename PARAM2>
   bool serialize (hb_serialize_context_t *c,
-                  unsigned int offSize_,
-                  const DATA *dataArray,
-                  unsigned int dataArrayLen,
-                  const hb_vector_t<unsigned int> &dataSizeArray,
-                  const PARAM1 &param1,
-                  const PARAM2 &param2)
+		  unsigned int offSize_,
+		  const DATA *dataArray,
+		  unsigned int dataArrayLen,
+		  const hb_vector_t<unsigned int> &dataSizeArray,
+		  const PARAM1 &param1,
+		  const PARAM2 &param2)
   {
     TRACE_SERIALIZE (this);
     /* serialize CFFIndex header */
     if (unlikely (!c->extend_min (this))) return_trace (false);
     this->count = dataArrayLen;
     this->offSize = offSize_;
-    if (unlikely (!c->allocate_size<HBUINT8> (offSize_ * (dataArrayLen + 1))))
+    if (unlikely (!c->allocate_size<HBUINT8> (offSize_ * (dataArrayLen + 1), false)))
       return_trace (false);
 
     /* serialize indices */
@@ -288,17 +236,17 @@ struct CFFIndexOf : CFFIndex<COUNT>
     unsigned int  i = 0;
     for (; i < dataArrayLen; i++)
     {
-      CFFIndex<COUNT>::set_offset_at (i, offset);
+      this->set_offset_at (i, offset);
       offset += dataSizeArray[i];
     }
-    CFFIndex<COUNT>::set_offset_at (i, offset);
+    this->set_offset_at (i, offset);
 
     /* serialize data */
     for (unsigned int i = 0; i < dataArrayLen; i++)
     {
       TYPE *dest = c->start_embed<TYPE> ();
       if (unlikely (!dest || !dest->serialize (c, dataArray[i], param1, param2)))
-        return_trace (false);
+	return_trace (false);
     }
     return_trace (true);
   }
@@ -309,14 +257,14 @@ struct Dict : UnsizedByteStr
 {
   template <typename DICTVAL, typename OP_SERIALIZER, typename ...Ts>
   bool serialize (hb_serialize_context_t *c,
-                  const DICTVAL &dictval,
-                  OP_SERIALIZER& opszr,
-                  Ts&&... ds)
+		  const DICTVAL &dictval,
+		  OP_SERIALIZER& opszr,
+		  Ts&&... ds)
   {
     TRACE_SERIALIZE (this);
     for (unsigned int i = 0; i < dictval.get_count (); i++)
       if (unlikely (!opszr.serialize (c, dictval[i], std::forward<Ts> (ds)...)))
-        return_trace (false);
+	return_trace (false);
 
     return_trace (true);
   }
@@ -324,13 +272,12 @@ struct Dict : UnsizedByteStr
   template <typename T, typename V>
   static bool serialize_int_op (hb_serialize_context_t *c, op_code_t op, V value, op_code_t intOp)
   {
-    // XXX: not sure why but LLVM fails to compile the following 'unlikely' macro invocation
-    if (/*unlikely*/ (!serialize_int<T, V> (c, intOp, value)))
+    if (unlikely ((!serialize_int<T, V> (c, intOp, value))))
       return false;
 
     TRACE_SERIALIZE (this);
     /* serialize the opcode */
-    HBUINT8 *p = c->allocate_size<HBUINT8> (OpCode_Size (op));
+    HBUINT8 *p = c->allocate_size<HBUINT8> (OpCode_Size (op), false);
     if (unlikely (!p)) return_trace (false);
     if (Is_OpCode_ESC (op))
     {
@@ -376,7 +323,7 @@ struct table_info_t
 
   unsigned int    offset;
   unsigned int    size;
-  objidx_t        link;
+  objidx_t	  link;
 };
 
 template <typename COUNT>
@@ -384,8 +331,8 @@ struct FDArray : CFFIndexOf<COUNT, FontDict>
 {
   template <typename DICTVAL, typename INFO, typename Iterator, typename OP_SERIALIZER>
   bool serialize (hb_serialize_context_t *c,
-                  Iterator it,
-                  OP_SERIALIZER& opszr)
+		  Iterator it,
+		  OP_SERIALIZER& opszr)
   {
     TRACE_SERIALIZE (this);
 
@@ -396,9 +343,9 @@ struct FDArray : CFFIndexOf<COUNT, FontDict>
     | hb_map ([&] (const hb_pair_t<const DICTVAL&, const INFO&> &_)
     {
       FontDict *dict = c->start_embed<FontDict> ();
-                dict->serialize (c, _.first, opszr, _.second);
-                return c->head - (const char*)dict;
-              })
+		dict->serialize (c, _.first, opszr, _.second);
+		return c->head - (const char*)dict;
+	      })
     | hb_sink (sizes)
     ;
     c->pop_pack (false);
@@ -415,9 +362,8 @@ struct FDSelect0 {
     TRACE_SANITIZE (this);
     if (unlikely (!(c->check_struct (this))))
       return_trace (false);
-    for (unsigned int i = 0; i < c->get_num_glyphs (); i++)
-      if (unlikely (!fds[i].sanitize (c)))
-        return_trace (false);
+    if (unlikely (!c->check_array (fds, c->get_num_glyphs ())))
+      return_trace (false);
 
     return_trace (true);
   }
@@ -458,12 +404,12 @@ struct FDSelect3_4
   {
     TRACE_SANITIZE (this);
     if (unlikely (!c->check_struct (this) || !ranges.sanitize (c, nullptr, fdcount) ||
-                  (nRanges () == 0) || ranges[0].first != 0))
+		  (nRanges () == 0) || ranges[0].first != 0))
       return_trace (false);
 
     for (unsigned int i = 1; i < nRanges (); i++)
       if (unlikely (ranges[i - 1].first >= ranges[i].first))
-        return_trace (false);
+	return_trace (false);
 
     if (unlikely (!sentinel().sanitize (c) || (sentinel() != c->get_num_glyphs ())))
       return_trace (false);
@@ -471,14 +417,20 @@ struct FDSelect3_4
     return_trace (true);
   }
 
+  static int _cmp_range (const void *_key, const void *_item)
+  {
+    hb_codepoint_t glyph = * (hb_codepoint_t *) _key;
+    FDSelect3_4_Range<GID_TYPE, FD_TYPE> *range = (FDSelect3_4_Range<GID_TYPE, FD_TYPE> *) _item;
+
+    if (glyph < range[0].first) return -1;
+    if (glyph < range[1].first) return 0;
+    return +1;
+  }
+
   hb_codepoint_t get_fd (hb_codepoint_t glyph) const
   {
-    unsigned int i;
-    for (i = 1; i < nRanges (); i++)
-      if (glyph < ranges[i].first)
-        break;
-
-    return (hb_codepoint_t) ranges[i - 1].fd;
+    auto *range = hb_bsearch (glyph, &ranges[0], nRanges () - 1, sizeof (ranges[0]), _cmp_range);
+    return range ? range->fd : ranges[nRanges () - 1].fd;
   }
 
   GID_TYPE        &nRanges ()       { return ranges.len; }
@@ -501,9 +453,9 @@ struct FDSelect
   {
     TRACE_SERIALIZE (this);
     unsigned int size = src.get_size (num_glyphs);
-    FDSelect *dest = c->allocate_size<FDSelect> (size);
+    FDSelect *dest = c->allocate_size<FDSelect> (size, false);
     if (unlikely (!dest)) return_trace (false);
-    memcpy (dest, &src, size);
+    hb_memcpy (dest, &src, size);
     return_trace (true);
   }
 
@@ -543,10 +495,10 @@ struct FDSelect
     }
   }
 
-  HBUINT8       format;
+  HBUINT8	format;
   union {
-  FDSelect0     format0;
-  FDSelect3     format3;
+  FDSelect0	format0;
+  FDSelect3	format3;
   } u;
   public:
   DEFINE_SIZE_MIN (1);

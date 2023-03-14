@@ -57,66 +57,20 @@
  **/
 const hb_ot_name_entry_t *
 hb_ot_name_list_names (hb_face_t    *face,
-                       unsigned int *num_entries /* OUT */)
+		       unsigned int *num_entries /* OUT */)
 {
   const OT::name_accelerator_t &name = *face->table.name;
   if (num_entries) *num_entries = name.names.length;
   return (const hb_ot_name_entry_t *) name.names;
 }
 
-
-template <typename in_utf_t, typename out_utf_t>
-static inline unsigned int
-hb_ot_name_convert_utf (hb_bytes_t                       bytes,
-                        unsigned int                    *text_size /* IN/OUT */,
-                        typename out_utf_t::codepoint_t *text /* OUT */)
-{
-  unsigned int src_len = bytes.length / sizeof (typename in_utf_t::codepoint_t);
-  const typename in_utf_t::codepoint_t *src = (const typename in_utf_t::codepoint_t *) bytes.arrayZ;
-  const typename in_utf_t::codepoint_t *src_end = src + src_len;
-
-  typename out_utf_t::codepoint_t *dst = text;
-
-  hb_codepoint_t unicode;
-  const hb_codepoint_t replacement = HB_BUFFER_REPLACEMENT_CODEPOINT_DEFAULT;
-
-  if (text_size && *text_size)
-  {
-    (*text_size)--; /* Same room for NUL-termination. */
-    const typename out_utf_t::codepoint_t *dst_end = text + *text_size;
-
-    while (src < src_end && dst < dst_end)
-    {
-      const typename in_utf_t::codepoint_t *src_next = in_utf_t::next (src, src_end, &unicode, replacement);
-      typename out_utf_t::codepoint_t *dst_next = out_utf_t::encode (dst, dst_end, unicode);
-      if (dst_next == dst)
-        break; /* Out-of-room. */
-
-      dst = dst_next;
-      src = src_next;
-    }
-
-    *text_size = dst - text;
-    *dst = 0; /* NUL-terminate. */
-  }
-
-  /* Accumulate length of rest. */
-  unsigned int dst_len = dst - text;
-  while (src < src_end)
-  {
-    src = in_utf_t::next (src, src_end, &unicode, replacement);
-    dst_len += out_utf_t::encode_len (unicode);
-  }
-  return dst_len;
-}
-
 template <typename utf_t>
 static inline unsigned int
 hb_ot_name_get_utf (hb_face_t       *face,
-                    hb_ot_name_id_t  name_id,
-                    hb_language_t    language,
-                    unsigned int    *text_size /* IN/OUT */,
-                    typename utf_t::codepoint_t *text /* OUT */)
+		    hb_ot_name_id_t  name_id,
+		    hb_language_t    language,
+		    unsigned int    *text_size /* IN/OUT */,
+		    typename utf_t::codepoint_t *text /* OUT */)
 {
   const OT::name_accelerator_t &name = *face->table.name;
 
@@ -130,10 +84,10 @@ hb_ot_name_get_utf (hb_face_t       *face,
     hb_bytes_t bytes = name.get_name (idx);
 
     if (width == 2) /* UTF16-BE */
-      return hb_ot_name_convert_utf<hb_utf16_be_t, utf_t> (bytes, text_size, text);
+      return OT::hb_ot_name_convert_utf<hb_utf16_be_t, utf_t> (bytes, text_size, text);
 
     if (width == 1) /* ASCII */
-      return hb_ot_name_convert_utf<hb_ascii_t, utf_t> (bytes, text_size, text);
+      return OT::hb_ot_name_convert_utf<hb_ascii_t, utf_t> (bytes, text_size, text);
   }
 
   if (text_size)
@@ -164,13 +118,13 @@ hb_ot_name_get_utf (hb_face_t       *face,
  **/
 unsigned int
 hb_ot_name_get_utf8 (hb_face_t       *face,
-                     hb_ot_name_id_t  name_id,
-                     hb_language_t    language,
-                     unsigned int    *text_size /* IN/OUT */,
-                     char            *text      /* OUT */)
+		     hb_ot_name_id_t  name_id,
+		     hb_language_t    language,
+		     unsigned int    *text_size /* IN/OUT */,
+		     char            *text      /* OUT */)
 {
   return hb_ot_name_get_utf<hb_utf8_t> (face, name_id, language, text_size,
-                                        (hb_utf8_t::codepoint_t *) text);
+					(hb_utf8_t::codepoint_t *) text);
 }
 
 /**
@@ -192,10 +146,10 @@ hb_ot_name_get_utf8 (hb_face_t       *face,
  **/
 unsigned int
 hb_ot_name_get_utf16 (hb_face_t       *face,
-                      hb_ot_name_id_t  name_id,
-                      hb_language_t    language,
-                      unsigned int    *text_size /* IN/OUT */,
-                      uint16_t        *text      /* OUT */)
+		      hb_ot_name_id_t  name_id,
+		      hb_language_t    language,
+		      unsigned int    *text_size /* IN/OUT */,
+		      uint16_t        *text      /* OUT */)
 {
   return hb_ot_name_get_utf<hb_utf16_t> (face, name_id, language, text_size, text);
 }
@@ -219,13 +173,14 @@ hb_ot_name_get_utf16 (hb_face_t       *face,
  **/
 unsigned int
 hb_ot_name_get_utf32 (hb_face_t       *face,
-                      hb_ot_name_id_t  name_id,
-                      hb_language_t    language,
-                      unsigned int    *text_size /* IN/OUT */,
-                      uint32_t        *text      /* OUT */)
+		      hb_ot_name_id_t  name_id,
+		      hb_language_t    language,
+		      unsigned int    *text_size /* IN/OUT */,
+		      uint32_t        *text      /* OUT */)
 {
   return hb_ot_name_get_utf<hb_utf32_t> (face, name_id, language, text_size, text);
 }
 
+#include "hb-ot-name-language-static.hh"
 
 #endif

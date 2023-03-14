@@ -32,27 +32,8 @@
 
 #include "hb.hh"
 #include "hb-unicode.hh"
+#include "hb-set-digest.hh"
 
-
-#ifndef HB_BUFFER_MAX_LEN_FACTOR
-#define HB_BUFFER_MAX_LEN_FACTOR 64
-#endif
-#ifndef HB_BUFFER_MAX_LEN_MIN
-#define HB_BUFFER_MAX_LEN_MIN 16384
-#endif
-#ifndef HB_BUFFER_MAX_LEN_DEFAULT
-#define HB_BUFFER_MAX_LEN_DEFAULT 0x3FFFFFFF /* Shaping more than a billion chars? Let us know! */
-#endif
-
-#ifndef HB_BUFFER_MAX_OPS_FACTOR
-#define HB_BUFFER_MAX_OPS_FACTOR 1024
-#endif
-#ifndef HB_BUFFER_MAX_OPS_MIN
-#define HB_BUFFER_MAX_OPS_MIN 16384
-#endif
-#ifndef HB_BUFFER_MAX_OPS_DEFAULT
-#define HB_BUFFER_MAX_OPS_DEFAULT 0x1FFFFFFF /* Shaping more than a billion operations? Let us know! */
-#endif
 
 static_assert ((sizeof (hb_glyph_info_t) == 20), "");
 static_assert ((sizeof (hb_glyph_info_t) == sizeof (hb_glyph_position_t)), "");
@@ -63,20 +44,20 @@ HB_MARK_AS_FLAG_T (hb_buffer_serialize_flags_t);
 HB_MARK_AS_FLAG_T (hb_buffer_diff_flags_t);
 
 enum hb_buffer_scratch_flags_t {
-  HB_BUFFER_SCRATCH_FLAG_DEFAULT                        = 0x00000000u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_NON_ASCII                  = 0x00000001u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_DEFAULT_IGNORABLES         = 0x00000002u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_SPACE_FALLBACK             = 0x00000004u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_GPOS_ATTACHMENT            = 0x00000008u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_CGJ                        = 0x00000010u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_GLYPH_FLAGS                = 0x00000020u,
-  HB_BUFFER_SCRATCH_FLAG_HAS_BROKEN_SYLLABLE            = 0x00000040u,
+  HB_BUFFER_SCRATCH_FLAG_DEFAULT			= 0x00000000u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_NON_ASCII			= 0x00000001u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_DEFAULT_IGNORABLES		= 0x00000002u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_SPACE_FALLBACK		= 0x00000004u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_GPOS_ATTACHMENT		= 0x00000008u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_CGJ			= 0x00000010u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_GLYPH_FLAGS		= 0x00000020u,
+  HB_BUFFER_SCRATCH_FLAG_HAS_BROKEN_SYLLABLE		= 0x00000040u,
 
   /* Reserved for shapers' internal use. */
-  HB_BUFFER_SCRATCH_FLAG_SHAPER0                        = 0x01000000u,
-  HB_BUFFER_SCRATCH_FLAG_SHAPER1                        = 0x02000000u,
-  HB_BUFFER_SCRATCH_FLAG_SHAPER2                        = 0x04000000u,
-  HB_BUFFER_SCRATCH_FLAG_SHAPER3                        = 0x08000000u,
+  HB_BUFFER_SCRATCH_FLAG_SHAPER0			= 0x01000000u,
+  HB_BUFFER_SCRATCH_FLAG_SHAPER1			= 0x02000000u,
+  HB_BUFFER_SCRATCH_FLAG_SHAPER2			= 0x04000000u,
+  HB_BUFFER_SCRATCH_FLAG_SHAPER3			= 0x08000000u,
 };
 HB_MARK_AS_FLAG_T (hb_buffer_scratch_flags_t);
 
@@ -207,6 +188,14 @@ struct hb_buffer_t
   hb_glyph_info_t &prev ()      { return out_info[out_len ? out_len - 1 : 0]; }
   hb_glyph_info_t prev () const { return out_info[out_len ? out_len - 1 : 0]; }
 
+  hb_set_digest_t digest () const
+  {
+    hb_set_digest_t d;
+    d.init ();
+    d.add_array (&info[0].codepoint, len, sizeof (info[0]));
+    return d;
+  }
+
   HB_INTERNAL void similar (const hb_buffer_t &src);
   HB_INTERNAL void reset ();
   HB_INTERNAL void clear ();
@@ -219,10 +208,10 @@ struct hb_buffer_t
   HB_INTERNAL
 #endif
   bool verify (hb_buffer_t        *text_buffer,
-               hb_font_t          *font,
-               const hb_feature_t *features,
-               unsigned int        num_features,
-               const char * const *shapers)
+	       hb_font_t          *font,
+	       const hb_feature_t *features,
+	       unsigned int        num_features,
+	       const char * const *shapers)
 #ifndef HB_NO_BUFFER_VERIFY
   ;
 #else
@@ -234,7 +223,7 @@ struct hb_buffer_t
   uint8_t next_serial () { return ++serial ? serial : ++serial; }
 
   HB_INTERNAL void add (hb_codepoint_t  codepoint,
-                        unsigned int    cluster);
+			unsigned int    cluster);
   HB_INTERNAL void add_info (const hb_glyph_info_t &glyph_info);
 
   void reverse_range (unsigned start, unsigned end)
@@ -247,7 +236,7 @@ struct hb_buffer_t
 
   template <typename FuncType>
   void reverse_groups (const FuncType& group,
-                       bool merge_clusters = false)
+		       bool merge_clusters = false)
   {
     if (unlikely (!len))
       return;
@@ -258,10 +247,10 @@ struct hb_buffer_t
     {
       if (!group (info[i - 1], info[i]))
       {
-        if (merge_clusters)
-          this->merge_clusters (start, i);
-        reverse_range (start, i);
-        start = i;
+	if (merge_clusters)
+	  this->merge_clusters (start, i);
+	reverse_range (start, i);
+	start = i;
       }
     }
     if (merge_clusters)
@@ -281,21 +270,22 @@ struct hb_buffer_t
   }
 
   static bool _cluster_group_func (const hb_glyph_info_t& a,
-                                   const hb_glyph_info_t& b)
+				   const hb_glyph_info_t& b)
   { return a.cluster == b.cluster; }
 
   void reverse_clusters () { reverse_groups (_cluster_group_func); }
 
   HB_INTERNAL void guess_segment_properties ();
 
-  HB_INTERNAL void sync ();
+  HB_INTERNAL bool sync ();
+  HB_INTERNAL int sync_so_far ();
   HB_INTERNAL void clear_output ();
   HB_INTERNAL void clear_positions ();
 
   template <typename T>
   HB_NODISCARD bool replace_glyphs (unsigned int num_in,
-                                    unsigned int num_out,
-                                    const T *glyph_data)
+				    unsigned int num_out,
+				    const T *glyph_data)
   {
     if (unlikely (!make_room_for (num_in, num_out))) return false;
 
@@ -350,8 +340,8 @@ struct hb_buffer_t
     {
       if (out_info != info || out_len != idx)
       {
-        if (unlikely (!make_room_for (1, 1))) return false;
-        out_info[out_len] = info[idx];
+	if (unlikely (!make_room_for (1, 1))) return false;
+	out_info[out_len] = info[idx];
       }
       out_len++;
     }
@@ -367,8 +357,8 @@ struct hb_buffer_t
     {
       if (out_info != info || out_len != idx)
       {
-        if (unlikely (!make_room_for (n, n))) return false;
-        memmove (out_info + out_len, info + idx, n * sizeof (out_info[0]));
+	if (unlikely (!make_room_for (n, n))) return false;
+	memmove (out_info + out_len, info + idx, n * sizeof (out_info[0]));
       }
       out_len += n;
     }
@@ -389,7 +379,7 @@ struct hb_buffer_t
       info[j].mask |= mask;
   }
   HB_INTERNAL void set_masks (hb_mask_t value, hb_mask_t mask,
-                              unsigned int cluster_start, unsigned int cluster_end);
+			      unsigned int cluster_start, unsigned int cluster_end);
 
   void merge_clusters (unsigned int start, unsigned int end)
   {
@@ -401,16 +391,18 @@ struct hb_buffer_t
   HB_INTERNAL void merge_out_clusters (unsigned int start, unsigned int end);
   /* Merge clusters for deleting current glyph, and skip it. */
   HB_INTERNAL void delete_glyph ();
+  HB_INTERNAL void delete_glyphs_inplace (bool (*filter) (const hb_glyph_info_t *info));
+
 
 
   /* Adds glyph flags in mask to infos with clusters between start and end.
    * The start index will be from out-buffer if from_out_buffer is true.
    * If interior is true, then the cluster having the minimum value is skipped. */
   void _set_glyph_flags (hb_mask_t mask,
-                         unsigned start = 0,
-                         unsigned end = (unsigned) -1,
-                         bool interior = false,
-                         bool from_out_buffer = false)
+			 unsigned start = 0,
+			 unsigned end = (unsigned) -1,
+			 bool interior = false,
+			 bool from_out_buffer = false)
   {
     end = hb_min (end, len);
 
@@ -423,13 +415,13 @@ struct hb_buffer_t
     {
       if (!interior)
       {
-        for (unsigned i = start; i < end; i++)
-          info[i].mask |= mask;
+	for (unsigned i = start; i < end; i++)
+	  info[i].mask |= mask;
       }
       else
       {
-        unsigned cluster = _infos_find_min_cluster (info, start, end);
-        _infos_set_glyph_flags (info, start, end, cluster, mask);
+	unsigned cluster = _infos_find_min_cluster (info, start, end);
+	_infos_set_glyph_flags (info, start, end, cluster, mask);
       }
     }
     else
@@ -439,18 +431,18 @@ struct hb_buffer_t
 
       if (!interior)
       {
-        for (unsigned i = start; i < out_len; i++)
-          out_info[i].mask |= mask;
-        for (unsigned i = idx; i < end; i++)
-          info[i].mask |= mask;
+	for (unsigned i = start; i < out_len; i++)
+	  out_info[i].mask |= mask;
+	for (unsigned i = idx; i < end; i++)
+	  info[i].mask |= mask;
       }
       else
       {
-        unsigned cluster = _infos_find_min_cluster (info, idx, end);
-        cluster = _infos_find_min_cluster (out_info, start, out_len, cluster);
+	unsigned cluster = _infos_find_min_cluster (info, idx, end);
+	cluster = _infos_find_min_cluster (out_info, start, out_len, cluster);
 
-        _infos_set_glyph_flags (out_info, start, out_len, cluster, mask);
-        _infos_set_glyph_flags (info, idx, end, cluster, mask);
+	_infos_set_glyph_flags (out_info, start, out_len, cluster, mask);
+	_infos_set_glyph_flags (info, idx, end, cluster, mask);
       }
     }
   }
@@ -458,30 +450,41 @@ struct hb_buffer_t
   void unsafe_to_break (unsigned int start = 0, unsigned int end = -1)
   {
     _set_glyph_flags (HB_GLYPH_FLAG_UNSAFE_TO_BREAK | HB_GLYPH_FLAG_UNSAFE_TO_CONCAT,
-                      start, end,
-                      true);
+		      start, end,
+		      true);
+  }
+  void safe_to_insert_tatweel (unsigned int start = 0, unsigned int end = -1)
+  {
+    if ((flags & HB_BUFFER_FLAG_PRODUCE_SAFE_TO_INSERT_TATWEEL) == 0)
+    {
+      unsafe_to_break (start, end);
+      return;
+    }
+    _set_glyph_flags (HB_GLYPH_FLAG_SAFE_TO_INSERT_TATWEEL,
+		      start, end,
+		      true);
   }
   void unsafe_to_concat (unsigned int start = 0, unsigned int end = -1)
   {
     if (likely ((flags & HB_BUFFER_FLAG_PRODUCE_UNSAFE_TO_CONCAT) == 0))
       return;
     _set_glyph_flags (HB_GLYPH_FLAG_UNSAFE_TO_CONCAT,
-                      start, end,
-                      true);
+		      start, end,
+		      true);
   }
   void unsafe_to_break_from_outbuffer (unsigned int start = 0, unsigned int end = -1)
   {
     _set_glyph_flags (HB_GLYPH_FLAG_UNSAFE_TO_BREAK | HB_GLYPH_FLAG_UNSAFE_TO_CONCAT,
-                      start, end,
-                      true, true);
+		      start, end,
+		      true, true);
   }
   void unsafe_to_concat_from_outbuffer (unsigned int start = 0, unsigned int end = -1)
   {
     if (likely ((flags & HB_BUFFER_FLAG_PRODUCE_UNSAFE_TO_CONCAT) == 0))
       return;
     _set_glyph_flags (HB_GLYPH_FLAG_UNSAFE_TO_CONCAT,
-                      start, end,
-                      false, true);
+		      start, end,
+		      false, true);
   }
 
 
@@ -499,19 +502,19 @@ struct hb_buffer_t
   void assert_glyphs ()
   {
     assert ((content_type == HB_BUFFER_CONTENT_TYPE_GLYPHS) ||
-            (!len && (content_type == HB_BUFFER_CONTENT_TYPE_INVALID)));
+	    (!len && (content_type == HB_BUFFER_CONTENT_TYPE_INVALID)));
   }
   void assert_unicode ()
   {
     assert ((content_type == HB_BUFFER_CONTENT_TYPE_UNICODE) ||
-            (!len && (content_type == HB_BUFFER_CONTENT_TYPE_INVALID)));
+	    (!len && (content_type == HB_BUFFER_CONTENT_TYPE_INVALID)));
   }
   HB_NODISCARD bool ensure_glyphs ()
   {
     if (unlikely (content_type != HB_BUFFER_CONTENT_TYPE_GLYPHS))
     {
       if (content_type != HB_BUFFER_CONTENT_TYPE_INVALID)
-        return false;
+	return false;
       assert (len == 0);
       content_type = HB_BUFFER_CONTENT_TYPE_GLYPHS;
     }
@@ -522,7 +525,7 @@ struct hb_buffer_t
     if (unlikely (content_type != HB_BUFFER_CONTENT_TYPE_UNICODE))
     {
       if (content_type != HB_BUFFER_CONTENT_TYPE_INVALID)
-        return false;
+	return false;
       assert (len == 0);
       content_type = HB_BUFFER_CONTENT_TYPE_UNICODE;
     }
@@ -555,14 +558,10 @@ struct hb_buffer_t
     if (likely (!messaging ()))
       return true;
 
-    message_depth++;
-
     va_list ap;
     va_start (ap, fmt);
     bool ret = message_impl (font, fmt, ap);
     va_end (ap);
-
-    message_depth--;
 
     return ret;
 #endif
@@ -578,25 +577,63 @@ struct hb_buffer_t
   }
   void
   _infos_set_glyph_flags (hb_glyph_info_t *infos,
-                          unsigned int start, unsigned int end,
-                          unsigned int cluster,
-                          hb_mask_t mask)
+			  unsigned int start, unsigned int end,
+			  unsigned int cluster,
+			  hb_mask_t mask)
   {
-    for (unsigned int i = start; i < end; i++)
-      if (cluster != infos[i].cluster)
+    if (unlikely (start == end))
+      return;
+
+    unsigned cluster_first = infos[start].cluster;
+    unsigned cluster_last = infos[end - 1].cluster;
+
+    if (cluster_level == HB_BUFFER_CLUSTER_LEVEL_CHARACTERS ||
+	(cluster != cluster_first && cluster != cluster_last))
+    {
+      for (unsigned int i = start; i < end; i++)
+	if (cluster != infos[i].cluster)
+	{
+	  scratch_flags |= HB_BUFFER_SCRATCH_FLAG_HAS_GLYPH_FLAGS;
+	  infos[i].mask |= mask;
+	}
+      return;
+    }
+
+    /* Monotone clusters */
+
+    if (cluster == cluster_first)
+    {
+      for (unsigned int i = end; start < i && infos[i - 1].cluster != cluster_first; i--)
       {
-        scratch_flags |= HB_BUFFER_SCRATCH_FLAG_HAS_GLYPH_FLAGS;
-        infos[i].mask |= mask;
+	scratch_flags |= HB_BUFFER_SCRATCH_FLAG_HAS_GLYPH_FLAGS;
+	infos[i - 1].mask |= mask;
       }
+    }
+    else /* cluster == cluster_last */
+    {
+      for (unsigned int i = start; i < end && infos[i].cluster != cluster_last; i++)
+      {
+	scratch_flags |= HB_BUFFER_SCRATCH_FLAG_HAS_GLYPH_FLAGS;
+	infos[i].mask |= mask;
+      }
+    }
   }
-  static unsigned
+  unsigned
   _infos_find_min_cluster (const hb_glyph_info_t *infos,
-                           unsigned start, unsigned end,
-                           unsigned cluster = UINT_MAX)
+			   unsigned start, unsigned end,
+			   unsigned cluster = UINT_MAX)
   {
-    for (unsigned int i = start; i < end; i++)
-      cluster = hb_min (cluster, infos[i].cluster);
-    return cluster;
+    if (unlikely (start == end))
+      return cluster;
+
+    if (cluster_level == HB_BUFFER_CLUSTER_LEVEL_CHARACTERS)
+    {
+      for (unsigned int i = start; i < end; i++)
+	cluster = hb_min (cluster, infos[i].cluster);
+      return cluster;
+    }
+
+    return hb_min (cluster, hb_min (infos[start].cluster, infos[end - 1].cluster));
   }
 
   void clear_glyph_flags (hb_mask_t mask = 0)
@@ -616,16 +653,16 @@ DECLARE_NULL_INSTANCE (hb_buffer_t);
        start = end, end = buffer->group_end (start, group_func))
 
 #define foreach_cluster(buffer, start, end) \
-        foreach_group (buffer, start, end, hb_buffer_t::_cluster_group_func)
+	foreach_group (buffer, start, end, hb_buffer_t::_cluster_group_func)
 
 
 #define HB_BUFFER_XALLOCATE_VAR(b, func, var) \
   b->func (offsetof (hb_glyph_info_t, var) - offsetof(hb_glyph_info_t, var1), \
-           sizeof (b->info[0].var))
-#define HB_BUFFER_ALLOCATE_VAR(b, var)          HB_BUFFER_XALLOCATE_VAR (b, allocate_var,     var ())
-#define HB_BUFFER_TRY_ALLOCATE_VAR(b, var)      HB_BUFFER_XALLOCATE_VAR (b, try_allocate_var, var ())
-#define HB_BUFFER_DEALLOCATE_VAR(b, var)        HB_BUFFER_XALLOCATE_VAR (b, deallocate_var,   var ())
-#define HB_BUFFER_ASSERT_VAR(b, var)            HB_BUFFER_XALLOCATE_VAR (b, assert_var,       var ())
+	   sizeof (b->info[0].var))
+#define HB_BUFFER_ALLOCATE_VAR(b, var)		HB_BUFFER_XALLOCATE_VAR (b, allocate_var,     var ())
+#define HB_BUFFER_TRY_ALLOCATE_VAR(b, var)	HB_BUFFER_XALLOCATE_VAR (b, try_allocate_var, var ())
+#define HB_BUFFER_DEALLOCATE_VAR(b, var)	HB_BUFFER_XALLOCATE_VAR (b, deallocate_var,   var ())
+#define HB_BUFFER_ASSERT_VAR(b, var)		HB_BUFFER_XALLOCATE_VAR (b, assert_var,       var ())
 
 
 #endif /* HB_BUFFER_HH */

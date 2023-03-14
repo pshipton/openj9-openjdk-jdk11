@@ -1,8 +1,8 @@
-## Harfbuzz v4.4.1
+## Harfbuzz v7.0.1
 
 ### Harfbuzz License
 
-https://github.com/harfbuzz/harfbuzz/blob/4.4.1/COPYING
+https://github.com/harfbuzz/harfbuzz/blob/7.0.1/COPYING
 
 <pre>
 
@@ -11,22 +11,22 @@ For parts of HarfBuzz that are licensed under different licenses see individual
 files names COPYING in subdirectories where applicable.
 
 Copyright © 2010-2022  Google, Inc.
-Copyright © 2018-2020  Ebrahim Byagowi
-Copyright © 2019-2020  Facebook, Inc.
-Copyright © 2012-2015  Mozilla Foundation.
+Copyright © 2015-2020  Ebrahim Byagowi
+Copyright © 2019,2020  Facebook, Inc.
+Copyright © 2012,2015  Mozilla Foundation
 Copyright © 2011  Codethink Limited
-Copyright © 2008-2010  Nokia Corporation and/or its subsidiary(-ies)
+Copyright © 2008,2010  Nokia Corporation and/or its subsidiary(-ies)
 Copyright © 2009  Keith Stribley
-Copyright © 2009  Martin Hosken and SIL International
+Copyright © 2011  Martin Hosken and SIL International
 Copyright © 2007  Chris Wilson
-Copyright © 2005-2022 Behdad Esfahbod
-Copyright © 2005  David Turner
-Copyright © 2004-2013  Red Hat, Inc.
-Copyright © 1998-2004  David Turner and Werner Lemberg
-Copyright © 2016  Elie Roux <elie.roux@telecom-bretagne.eu>
-Copyright © 2018-2019 Adobe Inc.
-Copyright © 2018  Khaled Hosny
+Copyright © 2005,2006,2020,2021,2022,2023  Behdad Esfahbod
+Copyright © 2004,2007,2008,2009,2010,2013,2021,2022,2023  Red Hat, Inc.
+Copyright © 1998-2005  David Turner and Werner Lemberg
 Copyright © 2016  Igalia S.L.
+Copyright © 2022  Matthias Clasen
+Copyright © 2018,2021  Khaled Hosny
+Copyright © 2018,2019,2020  Adobe, Inc
+Copyright © 2013-2015  Alexei Podtelezhnikov
 
 For full copyright notices consult the individual files in the package.
 

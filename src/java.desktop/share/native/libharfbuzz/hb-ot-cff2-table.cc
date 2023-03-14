@@ -100,8 +100,8 @@ struct cff2_path_procs_extents_t : path_procs_t<cff2_path_procs_extents_t, cff2_
 struct cff2_cs_opset_extents_t : cff2_cs_opset_t<cff2_cs_opset_extents_t, cff2_extents_param_t, number_t, cff2_path_procs_extents_t> {};
 
 bool OT::cff2::accelerator_t::get_extents (hb_font_t *font,
-                                           hb_codepoint_t glyph,
-                                           hb_glyph_extents_t *extents) const
+					   hb_codepoint_t glyph,
+					   hb_glyph_extents_t *extents) const
 {
 #ifdef HB_NO_OT_FONT_CFF
   /* XXX Remove check when this code moves to .hh file. */
@@ -124,8 +124,8 @@ bool OT::cff2::accelerator_t::get_extents (hb_font_t *font,
   }
   else
   {
-    extents->x_bearing = font->em_scalef_x (param.min_x.to_real ());
-    extents->width = font->em_scalef_x (param.max_x.to_real ()) - extents->x_bearing;
+    extents->x_bearing = roundf (param.min_x.to_real ());
+    extents->width = roundf (param.max_x.to_real () - extents->x_bearing);
   }
   if (param.min_y >= param.max_y)
   {
@@ -134,9 +134,20 @@ bool OT::cff2::accelerator_t::get_extents (hb_font_t *font,
   }
   else
   {
-    extents->y_bearing = font->em_scalef_y (param.max_y.to_real ());
-    extents->height = font->em_scalef_y (param.min_y.to_real ()) - extents->y_bearing;
+    extents->y_bearing = roundf (param.max_y.to_real ());
+    extents->height = roundf (param.min_y.to_real () - extents->y_bearing);
   }
+
+  font->scale_glyph_extents (extents);
+
+  return true;
+}
+
+bool OT::cff2::accelerator_t::paint_glyph (hb_font_t *font, hb_codepoint_t glyph, hb_paint_funcs_t *funcs, void *data, hb_color_t foreground) const
+{
+  funcs->push_clip_glyph (data, glyph, font);
+  funcs->color (data, true, foreground);
+  funcs->pop_clip (data);
 
   return true;
 }
@@ -158,8 +169,8 @@ struct cff2_path_param_t
   void cubic_to (const point_t &p1, const point_t &p2, const point_t &p3)
   {
     draw_session->cubic_to (font->em_fscalef_x (p1.x.to_real ()), font->em_fscalef_y (p1.y.to_real ()),
-                           font->em_fscalef_x (p2.x.to_real ()), font->em_fscalef_y (p2.y.to_real ()),
-                           font->em_fscalef_x (p3.x.to_real ()), font->em_fscalef_y (p3.y.to_real ()));
+			   font->em_fscalef_x (p2.x.to_real ()), font->em_fscalef_y (p2.y.to_real ()),
+			   font->em_fscalef_x (p3.x.to_real ()), font->em_fscalef_y (p3.y.to_real ()));
   }
 
   protected:

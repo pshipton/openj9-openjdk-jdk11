@@ -74,6 +74,11 @@ struct hb_bit_set_invertible_t
       inverted = !inverted;
   }
 
+  bool is_inverted () const
+  {
+    return inverted;
+  }
+
   bool is_empty () const
   {
     hb_codepoint_t v = INVALID;
@@ -123,10 +128,8 @@ struct hb_bit_set_invertible_t
   bool get (hb_codepoint_t g) const { return s.get (g) ^ inverted; }
 
   /* Has interface. */
-  static constexpr bool SENTINEL = false;
-  typedef bool value_t;
-  value_t operator [] (hb_codepoint_t k) const { return get (k); }
-  bool has (hb_codepoint_t k) const { return (*this)[k] != SENTINEL; }
+  bool operator [] (hb_codepoint_t k) const { return get (k); }
+  bool has (hb_codepoint_t k) const { return (*this)[k]; }
   /* Predicate. */
   bool operator () (hb_codepoint_t k) const { return has (k); }
 
@@ -159,7 +162,7 @@ struct hb_bit_set_invertible_t
       auto it1 = iter ();
       auto it2 = other.iter ();
       return hb_all (+ hb_zip (it1, it2)
-                     | hb_map ([](hb_pair_t<hb_codepoint_t, hb_codepoint_t> _) { return _.first == _.second; }));
+		     | hb_map ([](hb_pair_t<hb_codepoint_t, hb_codepoint_t> _) { return _.first == _.second; }));
     }
   }
 
@@ -181,16 +184,16 @@ struct hb_bit_set_invertible_t
     if (likely (inverted == other.inverted))
     {
       if (unlikely (inverted))
-        process (hb_bitwise_and, other);
+	process (hb_bitwise_and, other);
       else
-        process (hb_bitwise_or, other); /* Main branch. */
+	process (hb_bitwise_or, other); /* Main branch. */
     }
     else
     {
       if (unlikely (inverted))
-        process (hb_bitwise_gt, other);
+	process (hb_bitwise_gt, other);
       else
-        process (hb_bitwise_lt, other);
+	process (hb_bitwise_lt, other);
     }
     if (likely (s.successful))
       inverted = inverted || other.inverted;
@@ -200,16 +203,16 @@ struct hb_bit_set_invertible_t
     if (likely (inverted == other.inverted))
     {
       if (unlikely (inverted))
-        process (hb_bitwise_or, other);
+	process (hb_bitwise_or, other);
       else
-        process (hb_bitwise_and, other); /* Main branch. */
+	process (hb_bitwise_and, other); /* Main branch. */
     }
     else
     {
       if (unlikely (inverted))
-        process (hb_bitwise_lt, other);
+	process (hb_bitwise_lt, other);
       else
-        process (hb_bitwise_gt, other);
+	process (hb_bitwise_gt, other);
     }
     if (likely (s.successful))
       inverted = inverted && other.inverted;
@@ -219,16 +222,16 @@ struct hb_bit_set_invertible_t
     if (likely (inverted == other.inverted))
     {
       if (unlikely (inverted))
-        process (hb_bitwise_lt, other);
+	process (hb_bitwise_lt, other);
       else
-        process (hb_bitwise_gt, other); /* Main branch. */
+	process (hb_bitwise_gt, other); /* Main branch. */
     }
     else
     {
       if (unlikely (inverted))
-        process (hb_bitwise_or, other);
+	process (hb_bitwise_or, other);
       else
-        process (hb_bitwise_and, other);
+	process (hb_bitwise_and, other);
     }
     if (likely (s.successful))
       inverted = inverted && !other.inverted;
@@ -327,11 +330,11 @@ struct hb_bit_set_invertible_t
   }
 
   unsigned int next_many (hb_codepoint_t  codepoint,
-                          hb_codepoint_t *out,
-                          unsigned int    size) const
+			  hb_codepoint_t *out,
+			  unsigned int    size) const
   {
     return inverted ? s.next_many_inverted (codepoint, out, size)
-                    : s.next_many (codepoint, out, size);
+		    : s.next_many (codepoint, out, size);
   }
 
   static constexpr hb_codepoint_t INVALID = hb_bit_set_t::INVALID;
@@ -343,12 +346,12 @@ struct hb_bit_set_invertible_t
   {
     static constexpr bool is_sorted_iterator = true;
     iter_t (const hb_bit_set_invertible_t &s_ = Null (hb_bit_set_invertible_t),
-            bool init = true) : s (&s_), v (INVALID), l(0)
+	    bool init = true) : s (&s_), v (INVALID), l(0)
     {
       if (init)
       {
-        l = s->get_population () + 1;
-        __next__ ();
+	l = s->get_population () + 1;
+	__next__ ();
       }
     }
 
