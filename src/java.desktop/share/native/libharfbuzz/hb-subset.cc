@@ -627,7 +627,7 @@ end:
   return success ? hb_face_reference (plan->dest) : nullptr;
 }
 
-#ifndef HB_NO_VISIBILITY
+//#ifndef HB_NO_VISIBILITY
 /* If NO_VISIBILITY, libharfbuzz has this. */
-#include "hb-ot-name-language-static.hh"
-#endif
+//#include "hb-ot-name-language-static.hh"
+//#endif
