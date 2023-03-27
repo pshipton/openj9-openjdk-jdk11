@@ -41,7 +41,7 @@ VALID_TOOLCHAINS_all="gcc clang solstudio xlc microsoft"
 VALID_TOOLCHAINS_linux="gcc clang"
 VALID_TOOLCHAINS_solaris="solstudio"
 VALID_TOOLCHAINS_macosx="gcc clang"
-VALID_TOOLCHAINS_aix="xlc"
+VALID_TOOLCHAINS_aix="clang"
 VALID_TOOLCHAINS_windows="microsoft"
 
 # Toolchain descriptions
@@ -279,16 +279,16 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
   fi
   AC_SUBST(TOOLCHAIN_TYPE)
 
-  # on AIX, check for xlclang++ on the PATH and TOOLCHAIN_PATH and use it if it is available
+  # on AIX, check for ibm-clang++_r on the PATH and TOOLCHAIN_PATH and use it if it is available
   if test "x$OPENJDK_TARGET_OS" = xaix; then
     if test "x$TOOLCHAIN_PATH" != x; then
       XLC_TEST_PATH=${TOOLCHAIN_PATH}/
     fi
 
-    XLCLANG_VERSION_OUTPUT=`${XLC_TEST_PATH}xlclang++ -qversion 2>&1 | $HEAD -n 1`
-    $ECHO "$XLCLANG_VERSION_OUTPUT" | $GREP "IBM XL C/C++ for AIX" > /dev/null
+    XLCLANG_VERSION_OUTPUT=`${XLC_TEST_PATH}ibm-clang++_r --version 2>&1 | $HEAD -n 1`
+    $ECHO "$XLCLANG_VERSION_OUTPUT" | $GREP "IBM Open XL C/C++ for AIX" > /dev/null
     if test $? -eq 0; then
-      AC_MSG_NOTICE([xlclang++ output: $XLCLANG_VERSION_OUTPUT])
+      AC_MSG_NOTICE([ibm-clang++_r output: $XLCLANG_VERSION_OUTPUT])
       XLC_USES_CLANG=true
     fi
   fi
@@ -307,9 +307,9 @@ AC_DEFUN_ONCE([TOOLCHAIN_DETERMINE_TOOLCHAIN_TYPE],
 
   if test "x$OPENJDK_TARGET_OS" = xaix; then
     if test "x$XLC_USES_CLANG" = xtrue; then
-      AC_MSG_NOTICE([xlclang++ detected, using it])
-      TOOLCHAIN_CC_BINARY_xlc="xlclang"
-      TOOLCHAIN_CXX_BINARY_xlc="xlclang++"
+      AC_MSG_NOTICE([ibm-clang++_r detected, using it])
+      TOOLCHAIN_CC_BINARY_xlc="ibm-clang_r"
+      TOOLCHAIN_CXX_BINARY_xlc="ibm-clang++_r"
     fi
   fi
 
