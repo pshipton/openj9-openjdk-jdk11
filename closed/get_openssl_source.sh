@@ -51,14 +51,17 @@ do
 		;;
 
 		'--' ) # no more options
+		echo "Bad option: $i"
 		usage
 		;;
 
 		-*) # bad option
+		echo "Bad option: $i"
 		usage
 		;;
 
 		*) # bad option
+		echo "Bad option: $i"
 		usage
 		;;
 	esac
