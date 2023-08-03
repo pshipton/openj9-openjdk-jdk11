@@ -26,7 +26,7 @@
  * @summary Ensure that direct memory can be unreserved
  *          as the reserving thread sleeps
  *
- * @run main/othervm -mx16M Chew
+ * @run main/othervm -mx16M -Xdump:system:events=throw,filter=java/lang/OutOfMemoryError Chew
  */
 
 import java.nio.*;
