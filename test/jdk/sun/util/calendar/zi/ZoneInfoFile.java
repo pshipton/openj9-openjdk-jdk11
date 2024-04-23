@@ -992,7 +992,7 @@ public class ZoneInfoFile {
         }
         data = readZoneInfoFile(JAVAZM_FILE_NAME);
         if (data == null) {
-            throw new IllegalArgumentException("ZoneInfoOldMapping " +
+            throw new IllegalAccessException("ZoneInfoOldMapping " +
                 JAVAZM_FILE_NAME + " either doesn't exist or doesn't have data");
         }
 
