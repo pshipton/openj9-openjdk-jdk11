@@ -438,6 +438,27 @@ public class HashedPasswordFileTest {
         Process process = ProcessTools.startProcess(
                 TestApp.class.getSimpleName(),
                 pb);
+        
+        final InputStream err = process.getErrorStream();
+        new Thread(new Runnable() {
+        	public void run() {
+        		int len = 0;
+        		byte buf[] = new byte[4096];
+        		while ((len = err.read(buf)) > 0) {
+        			System.err.write(buf, 0, len);
+        		}
+        	}
+        }).start();
+        final InputStream out = process.getInputStream();
+        new Thread(new Runnable() {
+        	public void run() {
+        		int len = 0;
+        		byte buf[] = new byte[4096];
+        		while ((len = out.read(buf)) > 0) {
+        			System.err.write(buf, 0, len);
+        		}
+        	}
+        }).start();
 
         if (process.waitFor() != 0) {
             throw new RuntimeException("Test Failed : Error starting default agent");
