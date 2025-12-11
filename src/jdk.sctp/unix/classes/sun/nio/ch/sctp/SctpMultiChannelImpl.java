@@ -22,6 +22,13 @@
  * or visit www.oracle.com if you need additional information or have any
  * questions.
  */
+
+/*
+ * ===========================================================================
+ * (c) Copyright IBM Corp. 2025, 2025 All Rights Reserved
+ * ===========================================================================
+ */
+
 package sun.nio.ch.sctp;
 
 import java.net.InetAddress;
@@ -355,6 +362,19 @@ public class SctpMultiChannelImpl extends SctpMultiChannel
     @Override
     public boolean translateAndSetReadyOps(int ops, SelectionKeyImpl sk) {
         return translateReadyOps(ops, 0, sk);
+    }
+
+    /**
+     * This method is added to support the pollset implementation
+     */
+    @Override
+    public void translateAndSetInterestOps(int ops, SelectionKeyImpl sk) {
+        int newOps = 0;
+        if ((ops & SelectionKey.OP_READ) != 0)
+            newOps |= Net.POLLIN;
+        if ((ops & SelectionKey.OP_WRITE) != 0)
+            newOps |= Net.POLLOUT;
+        sk.selector.putEventOps(sk, newOps);
     }
 
     @Override
